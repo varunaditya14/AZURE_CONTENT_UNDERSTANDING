@@ -1,0 +1,12 @@
+{
+  "name": "content-understanding-demo",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && .venv\\Scripts\\uvicorn app.main:app --reload",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently --names \"backend,frontend\" --prefix-colors \"cyan,magenta\" --kill-others-on-fail \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
