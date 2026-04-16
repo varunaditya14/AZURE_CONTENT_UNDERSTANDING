@@ -152,8 +152,14 @@ def extract_fields(result: dict[str, Any]) -> list[FieldResult]:
     for container_key in ("contents", "documents"):
         container = result.get(container_key)
         if isinstance(container, list) and container:
-            raw_fields = container[0].get("fields", {})
-            break
+            # Aggregate fields from ALL blocks — multi-page PDFs may have fields
+            # distributed across content blocks.
+            for block in container:
+                block_fields = block.get("fields") or {}
+                if isinstance(block_fields, dict):
+                    raw_fields.update(block_fields)
+            if raw_fields:
+                break
 
     if not raw_fields:
         # Fallback: top-level fields key
@@ -175,7 +181,7 @@ def _flatten_fields(
         confidence: float | None = _safe_confidence(field.get("confidence"))
 
         if field_type == "array":
-            items: list[dict] = field.get("valueArray") or []
+            items: list[dict] = field.get("valueArray") or field.get("value_array") or []
             if not items:
                 output.append(
                     FieldResult(name=full_name, value="[]", confidence=confidence)
@@ -185,7 +191,7 @@ def _flatten_fields(
             for idx, item in enumerate(items[:50]):
                 item_prefix = f"{full_name}[{idx}]"
                 if item.get("type") == "object":
-                    sub_fields = item.get("valueObject") or {}
+                    sub_fields = item.get("valueObject") or item.get("value_object") or {}
                     output.extend(_flatten_fields(sub_fields, prefix=item_prefix))
                 else:
                     output.append(
@@ -197,7 +203,7 @@ def _flatten_fields(
                     )
 
         elif field_type == "object":
-            sub_fields = field.get("valueObject") or {}
+            sub_fields = field.get("valueObject") or field.get("value_object") or {}
             output.extend(_flatten_fields(sub_fields, prefix=full_name))
 
         elif field_type == "address":
