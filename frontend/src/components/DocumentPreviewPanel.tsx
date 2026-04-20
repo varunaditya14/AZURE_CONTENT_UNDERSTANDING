@@ -68,7 +68,7 @@ export default function DocumentPreviewPanel({
   const canRenderImage = fileType === "image" && uploadedFile != null;
 
   return (
-    <div className="bg-white border border-[#e5e4e2] rounded-xl shadow-sm overflow-hidden flex flex-col">
+    <div className="h-full bg-white border border-[#e5e4e2] rounded-xl shadow-sm overflow-hidden flex flex-col">
       {/* Panel header */}
       <div className="px-5 py-3.5 border-b border-[#e5e4e2] flex items-center gap-2.5 flex-shrink-0">
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-[#f05742] text-white tracking-wide flex-shrink-0">

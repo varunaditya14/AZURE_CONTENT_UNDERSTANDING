@@ -111,7 +111,11 @@ export default function MetricsBar({
       </div>
 
       {/* Average confidence */}
-      <div className="bg-white border border-[#e5e4e2] rounded-xl px-5 py-4 shadow-sm">
+      <div
+        className={`bg-white border border-[#e5e4e2] rounded-xl px-5 py-4 shadow-sm ${
+          confPct === null ? "opacity-50" : ""
+        }`}
+      >
         <div
           className="flex items-center gap-1.5 mb-3"
           style={{ color: confPct !== null ? confColor : "#6b6b68" }}
@@ -137,7 +141,7 @@ export default function MetricsBar({
             </div>
           </div>
         ) : (
-          <p className="text-xs text-[#6b6b68] mt-1.5">across all fields</p>
+          <p className="text-xs text-[#9b9b98] mt-1.5">not available</p>
         )}
       </div>
     </div>

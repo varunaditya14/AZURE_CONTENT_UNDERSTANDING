@@ -33,7 +33,7 @@ export default function UploadCard({
   const handleFile = useCallback((file: File) => {
     if (!isSupportedFile(file)) {
       setValidationError(
-        `"${file.name}" is not supported. Upload a PDF or image (JPEG, PNG, TIFF, BMP, WebP).`,
+        `"${file.name}" is not supported. Upload a PDF, image (JPEG, PNG, TIFF, BMP, WebP), audio (MP3, WAV, OGG, FLAC, AAC, M4A), or video (MP4, MOV, AVI, MKV, WebM).`,
       );
       return;
     }
@@ -96,7 +96,7 @@ export default function UploadCard({
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.heif,.heic,.webp"
+          accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.heif,.heic,.webp,.mp3,.wav,.ogg,.flac,.aac,.m4a,.mp4,.mov,.avi,.mkv,.webm"
           className="hidden"
           onChange={handleInputChange}
         />
@@ -150,6 +150,34 @@ export default function UploadCard({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       d="M9 12h6M9 16h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z"
+                    />
+                  </svg>
+                ) : category === "audio" ? (
+                  <svg
+                    className="w-5 h-5 text-[#f05742]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
+                    />
+                  </svg>
+                ) : category === "video" ? (
+                  <svg
+                    className="w-5 h-5 text-[#f05742]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
                     />
                   </svg>
                 ) : (
@@ -213,7 +241,9 @@ export default function UploadCard({
                 Drop a file here, or click to browse
               </p>
               <p className="text-sm mt-1">
-                PDF, JPEG, PNG, TIFF, BMP, WebP &middot; Max 20 MB
+                PDF · JPEG · PNG · TIFF · BMP · WebP &nbsp;&middot;&nbsp;MP3 ·
+                WAV · OGG · FLAC · M4A &nbsp;&middot;&nbsp;MP4 · MOV · AVI · MKV
+                · WebM
               </p>
             </div>
           </div>
