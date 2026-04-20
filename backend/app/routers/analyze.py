@@ -40,6 +40,24 @@ _ROUTING_TABLE: dict[str, tuple[str, str, str]] = {
     "image/bmp": ("image", "image/bmp", settings.ANALYZER_ID_IMAGE),
     "image/heif": ("image", "image/heif", settings.ANALYZER_ID_IMAGE),
     "image/webp": ("image", "image/webp", settings.ANALYZER_ID_IMAGE),
+    # Audio
+    "audio/mpeg": ("audio", "audio/mpeg", settings.ANALYZER_ID_AUDIO),
+    "audio/mp4": ("audio", "audio/mp4", settings.ANALYZER_ID_AUDIO),
+    "audio/wav": ("audio", "audio/wav", settings.ANALYZER_ID_AUDIO),
+    "audio/x-wav": ("audio", "audio/wav", settings.ANALYZER_ID_AUDIO),
+    "audio/ogg": ("audio", "audio/ogg", settings.ANALYZER_ID_AUDIO),
+    "audio/flac": ("audio", "audio/flac", settings.ANALYZER_ID_AUDIO),
+    "audio/aac": ("audio", "audio/aac", settings.ANALYZER_ID_AUDIO),
+    "audio/x-aac": ("audio", "audio/aac", settings.ANALYZER_ID_AUDIO),
+    "audio/webm": ("audio", "audio/webm", settings.ANALYZER_ID_AUDIO),
+    "audio/x-m4a": ("audio", "audio/mp4", settings.ANALYZER_ID_AUDIO),
+    # Video
+    "video/mp4": ("video", "video/mp4", settings.ANALYZER_ID_VIDEO),
+    "video/mpeg": ("video", "video/mpeg", settings.ANALYZER_ID_VIDEO),
+    "video/quicktime": ("video", "video/quicktime", settings.ANALYZER_ID_VIDEO),
+    "video/webm": ("video", "video/webm", settings.ANALYZER_ID_VIDEO),
+    "video/x-msvideo": ("video", "video/x-msvideo", settings.ANALYZER_ID_VIDEO),
+    "video/x-matroska": ("video", "video/x-matroska", settings.ANALYZER_ID_VIDEO),
 }
 
 # Extension fallback when the client sends an unhelpful MIME type
@@ -54,9 +72,22 @@ _EXTENSION_FALLBACK: dict[str, str] = {
     ".heif": "image/heif",
     ".heic": "image/heif",
     ".webp": "image/webp",
+    # Audio
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    ".m4a": "audio/x-m4a",
+    # Video
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".avi": "video/x-msvideo",
+    ".mkv": "video/x-matroska",
+    ".webm": "video/webm",
 }
 
-_SUPPORTED_DISPLAY = "PDF, JPEG, PNG, TIFF, BMP, HEIF, WebP"
+_SUPPORTED_DISPLAY = "PDF, JPEG, PNG, TIFF, BMP, HEIF, WebP; MP3, WAV, OGG, FLAC, AAC, M4A; MP4, MOV, AVI, MKV, WebM"
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +144,33 @@ async def analyze(
         "[ROUTE] Routed | resolved_mime=%s | file_type=%s | analyzer_id=%s",
         resolved_mime,
         file_type_label,
-        analyzer_id,
+        analyzer_id or "(not configured)",
     )
+
+    # ── Guard: fail fast if analyzer_id is not configured ───────────────────
+    if not analyzer_id.strip():
+        _ENV_KEY_MAP = {
+            "pdf": "ANALYZER_ID_DOCUMENT",
+            "image": "ANALYZER_ID_IMAGE",
+            "audio": "ANALYZER_ID_AUDIO",
+            "video": "ANALYZER_ID_VIDEO",
+        }
+        env_key = _ENV_KEY_MAP.get(file_type_label, "ANALYZER_ID_*")
+        logger.error(
+            "[ROUTE] Analyzer ID not configured for file_type=%s — set %s in .env",
+            file_type_label,
+            env_key,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=ErrorDetail(
+                error="Analyzer not configured",
+                detail=(
+                    f"No analyzer ID is set for '{file_type_label}' files. "
+                    f"Add {env_key}=<your-analyzer-id> to your .env file and restart the server."
+                ),
+            ).model_dump(),
+        )
 
     # ── Read file bytes (single read — bytes are reused below) ──────────────
     try:
@@ -138,6 +194,13 @@ async def analyze(
         )
 
     # ── Call Azure Content Understanding ────────────────────────────────────
+    logger.info(
+        "[ROUTE] Submitting to Azure | analyzer_id=%s | file_type=%s | azure_content_type=%s | size_bytes=%d",
+        analyzer_id,
+        file_type_label,
+        azure_content_type,
+        len(file_bytes),
+    )
     try:
         raw_result, latency_ms = await analyze_file(
             file_bytes=file_bytes,

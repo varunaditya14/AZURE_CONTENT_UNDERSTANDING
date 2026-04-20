@@ -144,22 +144,41 @@ def extract_fields(result: dict[str, Any]) -> list[FieldResult]:
     return a flat list of `FieldResult` objects suitable for the frontend.
 
     Handles both result structures:
-    - ``result.contents[].fields``   (standard async response)
-    - ``result.documents[].fields``  (preview/alternative layout)
+    - ``result.contents[].fields``          (audio/document flat shape)
+    - ``result.documents[].fields``         (preview/alternative layout)
+    - ``result.result.contents[].fields``   (video SDK wrapper shape)
+
+    The Azure CU SDK wraps video results inside a nested ``"result"`` key:
+      { "status": "succeeded", "result": { "contents": [...] } }
+    Audio and document results are typically flat (no ``"result"`` wrapper).
+    Unwrapping here means we look for ``contents``/``documents`` at whichever
+    level they actually exist — so audio behaviour is unchanged.
     """
     raw_fields: dict[str, Any] = {}
 
-    for container_key in ("contents", "documents"):
-        container = result.get(container_key)
-        if isinstance(container, list) and container:
-            # Aggregate fields from ALL blocks — multi-page PDFs may have fields
-            # distributed across content blocks.
-            for block in container:
-                block_fields = block.get("fields") or {}
-                if isinstance(block_fields, dict):
-                    raw_fields.update(block_fields)
-            if raw_fields:
-                break
+    # Unwrap SDK result wrapper when present.
+    # If the top-level dict has a "result" key that is itself a dict, prefer
+    # searching inside it.  We try the outer level as well so that flat shapes
+    # (audio, documents) continue to work without any change.
+    search_candidates: list[dict[str, Any]] = [result]
+    nested = result.get("result")
+    if isinstance(nested, dict):
+        search_candidates.insert(0, nested)  # prefer inner; fall back to outer
+
+    for candidate in search_candidates:
+        for container_key in ("contents", "documents"):
+            container = candidate.get(container_key)
+            if isinstance(container, list) and container:
+                # Aggregate fields from ALL blocks — multi-page PDFs / videos
+                # may have fields distributed across content blocks.
+                for block in container:
+                    block_fields = block.get("fields") or {}
+                    if isinstance(block_fields, dict):
+                        raw_fields.update(block_fields)
+                if raw_fields:
+                    break
+        if raw_fields:
+            break  # found fields in this candidate; stop searching
 
     if not raw_fields:
         # Fallback: top-level fields key
@@ -198,7 +217,8 @@ def _flatten_fields(
                         FieldResult(
                             name=item_prefix,
                             value=_extract_simple_value(item),
-                            confidence=_safe_confidence(item.get("confidence", confidence)),
+                            # Use only the item's own confidence — do not inherit parent
+                            confidence=_safe_confidence(item.get("confidence")),
                         )
                     )
 

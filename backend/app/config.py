@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     AZURE_CU_KEY: str
     ANALYZER_ID_DOCUMENT: str
     ANALYZER_ID_IMAGE: str
+    ANALYZER_ID_AUDIO: str = ""
+    ANALYZER_ID_VIDEO: str = ""
 
     # Comma-separated list of allowed CORS origins
     ALLOWED_ORIGINS: str = "http://localhost:5173"
