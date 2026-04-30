@@ -259,10 +259,45 @@ function ArrayGroupCard({
 }) {
   const [expanded, setExpanded] = useState(true);
 
-  // Simple array: every item is a single entry with no sub-key
+  // ---------------------------------------------------------------------------
+  // Dynamic shape detection — no field names or analyzer names hardcoded.
+  //
+  // isSimple: every item is a single entry with no sub-key
+  //   → scalar/string array → render as chips
+  //
+  // Otherwise: array of objects/structured rows
+  //   → render as a horizontal table whose columns are the ordered union of
+  //     every sub-key seen across ALL items in this group.  Works for any
+  //     current or future analyzer/schema automatically.
+  // ---------------------------------------------------------------------------
   const isSimple = group.items.every(
     (item) => item.entries.length === 1 && item.entries[0].subKey === undefined,
   );
+
+  // Ordered union of all sub-keys (column names) across every row.
+  // Computed once per render; purely data-driven.
+  const columns = useMemo(() => {
+    if (isSimple) return [] as string[];
+    const seen = new Set<string>();
+    const cols: string[] = [];
+    for (const item of group.items) {
+      for (const e of item.entries) {
+        const col = e.subKey ?? "__value";
+        if (!seen.has(col)) {
+          seen.add(col);
+          cols.push(col);
+        }
+      }
+    }
+    return cols;
+  }, [group.items, isSimple]);
+
+  // Whether any row has at least one confidence value (controls conf column).
+  const hasRowConf =
+    showConfidence &&
+    group.items.some((item) =>
+      item.entries.some((e) => e.field.confidence !== null),
+    );
 
   return (
     <div className="border-b border-[#e5e4e2] last:border-b-0">
@@ -292,7 +327,7 @@ function ArrayGroupCard({
 
       {expanded &&
         (isSimple ? (
-          /* Chip / tag list for simple string arrays */
+          /* ── Chip / tag list for simple scalar arrays ─────────────────── */
           <div className="px-5 pb-4 flex flex-wrap gap-1.5">
             {group.items.map((item) => {
               const entry = item.entries[0];
@@ -323,71 +358,123 @@ function ArrayGroupCard({
             })}
           </div>
         ) : (
-          /* Item cards for object arrays (with sub-keys) */
-          <div className="px-4 pb-4 space-y-2">
-            {group.items.map((item) => (
-              <div
-                key={item.idx}
-                className="rounded-lg border border-[#e5e4e2] bg-[#f9f9f8] overflow-hidden"
-              >
-                <div className="px-3 py-1.5 border-b border-[#e5e4e2] bg-white">
-                  <span className="text-[10px] font-semibold text-[#9b9b98] uppercase tracking-wide">
-                    #{item.idx + 1}
-                  </span>
-                </div>
-                <div className="divide-y divide-[#e5e4e2]">
-                  {item.entries.map((e) => {
-                    const fieldName = `${group.name}[${item.idx}]${
-                      e.subKey ? `.${e.subKey}` : ""
-                    }`;
-                    const isSelected = selectedFieldName === fieldName;
-                    const isGrounded =
-                      groundedFieldNames?.has(fieldName) ?? false;
-                    return (
-                      <button
-                        key={e.subKey ?? "__value"}
-                        type="button"
-                        data-field-name={fieldName}
-                        className={[
-                          "w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors",
-                          isSelected ? "bg-[#f05742]/8" : "hover:bg-white/80",
-                          onFieldSelect ? "cursor-pointer" : "cursor-default",
-                        ].join(" ")}
-                        onClick={() =>
-                          onFieldSelect?.(isSelected ? null : fieldName)
-                        }
-                        onMouseEnter={() => onFieldHover?.(fieldName)}
-                        onMouseLeave={() => onFieldHover?.(null)}
-                      >
-                        {e.subKey && (
-                          <span className="font-mono text-[11px] text-[#6b6b68] flex-shrink-0 mt-px w-24 truncate">
-                            {e.subKey}
-                            {isGrounded && (
-                              <span
-                                className="inline-block w-1.5 h-1.5 rounded-full bg-[#f05742] ml-1 align-middle"
-                                title="Bounding region available"
-                              />
+          /* ── Horizontal table for object / structured arrays ──────────────
+               Columns = ordered union of all sub-keys across every row.
+               Works for any schema: current, future, or unknown.           */
+          <div className="px-4 pb-4 overflow-x-auto">
+            <table className="text-xs border-collapse w-full min-w-max">
+              <thead>
+                <tr className="bg-[#f9f9f8]">
+                  {/* Row index column */}
+                  <th className="px-2.5 py-2 text-center font-semibold text-[#9b9b98] uppercase tracking-wide border border-[#e5e4e2] w-8 select-none">
+                    #
+                  </th>
+                  {/* One <th> per dynamically-detected column */}
+                  {columns.map((col) => (
+                    <th
+                      key={col}
+                      className="px-3 py-2 text-left font-mono font-semibold text-[#f05742] border border-[#e5e4e2] whitespace-nowrap"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                  {hasRowConf && (
+                    <th className="px-3 py-2 text-right font-semibold text-[#9b9b98] uppercase tracking-wide border border-[#e5e4e2] whitespace-nowrap">
+                      Conf.
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {group.items.map((item) => {
+                  // Fast lookup: subKey → entry for this row.
+                  const entryMap = new Map(
+                    item.entries.map((e) => [e.subKey ?? "__value", e]),
+                  );
+
+                  // Average confidence for the row (used in Conf. column).
+                  const rowConf = hasRowConf
+                    ? (() => {
+                        const vals = item.entries
+                          .map((e) => e.field.confidence)
+                          .filter((v): v is number => v !== null);
+                        return vals.length > 0
+                          ? vals.reduce((a, b) => a + b, 0) / vals.length
+                          : null;
+                      })()
+                    : null;
+
+                  return (
+                    <tr
+                      key={item.idx}
+                      className="hover:bg-[#fff9f8] transition-colors"
+                    >
+                      {/* Row number */}
+                      <td className="px-2.5 py-2 text-center text-[#9b9b98] border border-[#e5e4e2] select-none">
+                        {item.idx + 1}
+                      </td>
+
+                      {/* One <td> per column — missing columns render as em-dash */}
+                      {columns.map((col) => {
+                        const entry = entryMap.get(col);
+                        const fieldName = `${group.name}[${item.idx}]${
+                          col !== "__value" ? `.${col}` : ""
+                        }`;
+                        const isSelected = selectedFieldName === fieldName;
+                        const isGrounded =
+                          groundedFieldNames?.has(fieldName) ?? false;
+                        return (
+                          <td
+                            key={col}
+                            data-field-name={fieldName}
+                            className={[
+                              "px-3 py-2 border border-[#e5e4e2] break-words max-w-[240px] align-top",
+                              isSelected ? "bg-[#f05742]/8" : "",
+                              onFieldSelect ? "cursor-pointer" : "",
+                            ].join(" ")}
+                            onClick={() =>
+                              entry &&
+                              onFieldSelect?.(isSelected ? null : fieldName)
+                            }
+                            onMouseEnter={() =>
+                              entry && onFieldHover?.(fieldName)
+                            }
+                            onMouseLeave={() => onFieldHover?.(null)}
+                          >
+                            {entry ? (
+                              entry.field.value !== null ? (
+                                <span className="text-[#1a1a18]">
+                                  {entry.field.value}
+                                  {isGrounded && (
+                                    <span
+                                      className="inline-block w-1.5 h-1.5 rounded-full bg-[#f05742] ml-1 align-middle"
+                                      title="Bounding region available"
+                                    />
+                                  )}
+                                </span>
+                              ) : (
+                                <em className="not-italic text-[#9b9b98]">
+                                  null
+                                </em>
+                              )
+                            ) : (
+                              /* Column exists in schema but absent in this row */
+                              <span className="text-[#c8c7c4]">—</span>
                             )}
-                          </span>
-                        )}
-                        <span className="flex-1 text-sm text-[#1a1a18] break-words min-w-0">
-                          {e.field.value ?? (
-                            <em className="not-italic text-[#9b9b98] text-xs">
-                              null
-                            </em>
-                          )}
-                        </span>
-                        {showConfidence && e.field.confidence !== null && (
-                          <span className="ml-2 flex-shrink-0">
-                            <ConfidenceBadge value={e.field.confidence} />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                          </td>
+                        );
+                      })}
+
+                      {hasRowConf && (
+                        <td className="px-3 py-2 border border-[#e5e4e2] text-right align-top">
+                          <ConfidenceBadge value={rowConf} />
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ))}
     </div>

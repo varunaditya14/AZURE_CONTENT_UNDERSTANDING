@@ -7,6 +7,29 @@ export function getAnalyzerLabel(fileType: string): string {
   return "Content Analyzer";
 }
 
+// ---------------------------------------------------------------------------
+// Canonical extension lists per category.
+// These are the single source of truth for the frontend.
+// _SUPPORTED_EXTS, ACCEPTED_EXTENSIONS_ATTR, FORMAT_GROUPS, and
+// resolveFileCategory all derive from these — add a new format only here.
+// ---------------------------------------------------------------------------
+
+const _IMAGE_EXTS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "tiff",
+  "tif",
+  "bmp",
+  "heif",
+  "heic",
+  "webp",
+] as const;
+
+const _AUDIO_EXTS = ["mp3", "wav", "ogg", "flac", "aac", "m4a"] as const;
+
+const _VIDEO_EXTS = ["mp4", "mov", "avi", "mkv", "webm"] as const;
+
 const _SUPPORTED_MIMES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -16,7 +39,6 @@ const _SUPPORTED_MIMES = new Set([
   "image/bmp",
   "image/heif",
   "image/webp",
-  // Audio
   "audio/mpeg",
   "audio/mp4",
   "audio/wav",
@@ -27,7 +49,6 @@ const _SUPPORTED_MIMES = new Set([
   "audio/x-aac",
   "audio/webm",
   "audio/x-m4a",
-  // Video
   "video/mp4",
   "video/mpeg",
   "video/quicktime",
@@ -38,29 +59,29 @@ const _SUPPORTED_MIMES = new Set([
 
 const _SUPPORTED_EXTS = new Set([
   "pdf",
-  "jpg",
-  "jpeg",
-  "png",
-  "tiff",
-  "tif",
-  "bmp",
-  "heif",
-  "heic",
-  "webp",
-  // Audio
-  "mp3",
-  "wav",
-  "ogg",
-  "flac",
-  "aac",
-  "m4a",
-  // Video
-  "mp4",
-  "mov",
-  "avi",
-  "mkv",
-  "webm",
+  ..._IMAGE_EXTS,
+  ..._AUDIO_EXTS,
+  ..._VIDEO_EXTS,
 ]);
+
+/**
+ * Comma-separated extension list for the HTML <input accept="..."> attribute.
+ * Derived from _SUPPORTED_EXTS — no need to maintain separately.
+ */
+export const ACCEPTED_EXTENSIONS_ATTR: string = [..._SUPPORTED_EXTS]
+  .map((e) => `.${e}`)
+  .join(",");
+
+/**
+ * Human-readable format groups used for hint text and error messages in the UI.
+ * UploadCard derives all visible format text from this object.
+ */
+export const FORMAT_GROUPS = {
+  document: ["PDF"],
+  image: ["JPEG", "PNG", "TIFF", "BMP", "WebP"],
+  audio: ["MP3", "WAV", "OGG", "FLAC", "AAC", "M4A"],
+  video: ["MP4", "MOV", "AVI", "MKV", "WebM"],
+} as const;
 
 /** Returns true if the file type is supported by the backend. */
 export function isSupportedFile(file: File): boolean {
@@ -79,27 +100,17 @@ export function resolveFileCategory(file: File): FileCategory {
   if (mime === "application/pdf" || ext === "pdf") return "pdf";
   if (
     mime.startsWith("image/") ||
-    [
-      "jpg",
-      "jpeg",
-      "png",
-      "tiff",
-      "tif",
-      "bmp",
-      "heif",
-      "heic",
-      "webp",
-    ].includes(ext)
+    (_IMAGE_EXTS as readonly string[]).includes(ext)
   )
     return "image";
   if (
     mime.startsWith("audio/") ||
-    ["mp3", "wav", "ogg", "flac", "aac", "m4a"].includes(ext)
+    (_AUDIO_EXTS as readonly string[]).includes(ext)
   )
     return "audio";
   if (
     mime.startsWith("video/") ||
-    ["mp4", "mov", "avi", "mkv", "webm"].includes(ext)
+    (_VIDEO_EXTS as readonly string[]).includes(ext)
   )
     return "video";
   return "unknown";

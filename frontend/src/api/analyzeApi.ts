@@ -1,3 +1,5 @@
+// Standard-mode file analysis.
+// Calls POST /standard/analyze — never touches Pro endpoints.
 import type { AnalyzeResponse, ErrorResponse } from "../types/analysis";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
@@ -12,7 +14,7 @@ export async function analyzeFile(file: File): Promise<AnalyzeResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${BASE_URL}/analyze`, {
+  const response = await fetch(`${BASE_URL}/standard/analyze`, {
     method: "POST",
     body: formData,
   });

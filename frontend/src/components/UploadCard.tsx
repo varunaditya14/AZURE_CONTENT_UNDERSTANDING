@@ -1,5 +1,10 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import { isSupportedFile, resolveFileCategory } from "../utils/fileRouting";
+import {
+  isSupportedFile,
+  resolveFileCategory,
+  ACCEPTED_EXTENSIONS_ATTR,
+  FORMAT_GROUPS,
+} from "../utils/fileRouting";
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -33,7 +38,10 @@ export default function UploadCard({
   const handleFile = useCallback((file: File) => {
     if (!isSupportedFile(file)) {
       setValidationError(
-        `"${file.name}" is not supported. Upload a PDF, image (JPEG, PNG, TIFF, BMP, WebP), audio (MP3, WAV, OGG, FLAC, AAC, M4A), or video (MP4, MOV, AVI, MKV, WebM).`,
+        `"${file.name}" is not supported. Upload a PDF, ` +
+          `image (${FORMAT_GROUPS.image.join(", ")}), ` +
+          `audio (${FORMAT_GROUPS.audio.join(", ")}), ` +
+          `or video (${FORMAT_GROUPS.video.join(", ")}).`,
       );
       return;
     }
@@ -96,7 +104,7 @@ export default function UploadCard({
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.heif,.heic,.webp,.mp3,.wav,.ogg,.flac,.aac,.m4a,.mp4,.mov,.avi,.mkv,.webm"
+          accept={ACCEPTED_EXTENSIONS_ATTR}
           className="hidden"
           onChange={handleInputChange}
         />
@@ -241,9 +249,10 @@ export default function UploadCard({
                 Drop a file here, or click to browse
               </p>
               <p className="text-sm mt-1">
-                PDF · JPEG · PNG · TIFF · BMP · WebP &nbsp;&middot;&nbsp;MP3 ·
-                WAV · OGG · FLAC · M4A &nbsp;&middot;&nbsp;MP4 · MOV · AVI · MKV
-                · WebM
+                {FORMAT_GROUPS.document.join(" · ")} &nbsp;&middot;&nbsp;{" "}
+                {FORMAT_GROUPS.image.join(" · ")} &nbsp;&middot;&nbsp;{" "}
+                {FORMAT_GROUPS.audio.join(" · ")} &nbsp;&middot;&nbsp;{" "}
+                {FORMAT_GROUPS.video.join(" · ")}
               </p>
             </div>
           </div>

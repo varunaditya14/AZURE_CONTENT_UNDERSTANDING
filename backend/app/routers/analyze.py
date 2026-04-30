@@ -1,12 +1,14 @@
 """
-Analyze router — POST /analyze
+Standard-mode analyze router — POST /standard/analyze
 
-Accepts a multipart file upload, detects whether it is a PDF or image,
-routes it to the appropriate Azure Content Understanding analyzer, and
-returns a structured AnalyzeResponse.
+Accepts a multipart file upload, detects the modality (document, image,
+audio, or video), routes it to the appropriate Azure Content Understanding
+analyzer configured in .env, and returns a structured AnalyzeResponse.
 
-To extend for audio/video: add entries to SUPPORTED_TYPES and
-MEDIA_TYPE_TO_ANALYZER below, then update the rejection message.
+This router is exclusively for Standard mode.  It never touches Pro analyzers.
+
+To add a new format: add an entry to _ROUTING_TABLE and _EXTENSION_FALLBACK.
+_SUPPORTED_DISPLAY, _ENV_KEY_MAP are derived automatically — no manual update.
 """
 
 from __future__ import annotations
@@ -21,12 +23,14 @@ from app.config import settings
 from app.models.schemas import AnalyzeResponse, ErrorDetail, FieldResult
 from app.services.azure_cu import AzureCUError, analyze_file, extract_fields
 
-router = APIRouter(prefix="/analyze", tags=["analyze"])
+router = APIRouter(prefix="/standard/analyze", tags=["standard"])
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# File type → (canonical label, MIME type sent to Azure, analyzer env var)
+# File type → (canonical label, MIME type sent to Azure, analyzer_id)
+# This is the single source of truth for accepted formats.
+# _SUPPORTED_DISPLAY and _ENV_KEY_MAP derive from these tables automatically.
 # ---------------------------------------------------------------------------
 
 # Each entry: (canonical_file_type, azure_content_type, analyzer_id)
@@ -60,16 +64,19 @@ _ROUTING_TABLE: dict[str, tuple[str, str, str]] = {
     "video/x-matroska": ("video", "video/x-matroska", settings.ANALYZER_ID_VIDEO),
 }
 
-# Extension fallback when the client sends an unhelpful MIME type
+# Extension fallback when the client sends an unhelpful MIME type.
+# IMPORTANT: list the canonical/preferred extension for each MIME type FIRST
+# (e.g. ".jpeg" before ".jpg") — the first entry per MIME becomes the
+# display name in error messages via _build_supported_display().
 _EXTENSION_FALLBACK: dict[str, str] = {
     ".pdf": "application/pdf",
+    ".jpeg": "image/jpeg",   # canonical — display shows "JPEG"
     ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
     ".png": "image/png",
-    ".tiff": "image/tiff",
+    ".tiff": "image/tiff",   # canonical — display shows "TIFF"
     ".tif": "image/tiff",
     ".bmp": "image/bmp",
-    ".heif": "image/heif",
+    ".heif": "image/heif",   # canonical — display shows "HEIF"
     ".heic": "image/heif",
     ".webp": "image/webp",
     # Audio
@@ -87,7 +94,47 @@ _EXTENSION_FALLBACK: dict[str, str] = {
     ".webm": "video/webm",
 }
 
-_SUPPORTED_DISPLAY = "PDF, JPEG, PNG, TIFF, BMP, HEIF, WebP; MP3, WAV, OGG, FLAC, AAC, M4A; MP4, MOV, AVI, MKV, WebM"
+# Display-name overrides for extensions where ext.upper() gives wrong casing.
+_EXT_DISPLAY_OVERRIDE: dict[str, str] = {
+    "webp": "WebP",
+    "webm": "WebM",
+}
+
+# Maps file_type label → env var name. Used in the "not configured" error.
+# Derived from the canonical labels in _ROUTING_TABLE.
+_ENV_KEY_MAP: dict[str, str] = {
+    "pdf": "ANALYZER_ID_DOCUMENT",
+    "image": "ANALYZER_ID_IMAGE",
+    "audio": "ANALYZER_ID_AUDIO",
+    "video": "ANALYZER_ID_VIDEO",
+}
+
+
+def _build_supported_display() -> str:
+    """
+    Compute the human-readable supported-types string from _EXTENSION_FALLBACK
+    and _ROUTING_TABLE so it never drifts when formats are added or removed.
+
+    The first extension listed per MIME in _EXTENSION_FALLBACK becomes the
+    display name for that MIME (e.g. ".jpeg" → "JPEG", ".tiff" → "TIFF").
+    _EXT_DISPLAY_OVERRIDE handles mixed-case names ("webp" → "WebP").
+    """
+    seen: set[str] = set()
+    groups: dict[str, list[str]] = {"pdf": [], "image": [], "audio": [], "video": []}
+    for ext, mime in _EXTENSION_FALLBACK.items():
+        if mime in seen or mime not in _ROUTING_TABLE:
+            continue
+        seen.add(mime)
+        label = _ROUTING_TABLE[mime][0]
+        if label in groups:
+            raw = ext.lstrip(".")
+            groups[label].append(_EXT_DISPLAY_OVERRIDE.get(raw, raw.upper()))
+    return "; ".join(
+        ", ".join(groups[lbl]) for lbl in ("pdf", "image", "audio", "video") if groups[lbl]
+    )
+
+
+_SUPPORTED_DISPLAY = _build_supported_display()
 
 
 # ---------------------------------------------------------------------------
@@ -103,10 +150,10 @@ _SUPPORTED_DISPLAY = "PDF, JPEG, PNG, TIFF, BMP, HEIF, WebP; MP3, WAV, OGG, FLAC
         422: {"model": ErrorDetail, "description": "Validation error"},
         502: {"model": ErrorDetail, "description": "Azure CU error"},
     },
-    summary="Analyze a PDF or image file",
+    summary="Analyze a document, image, audio, or video file",
 )
 async def analyze(
-    file: UploadFile = File(..., description="PDF or image file to analyze"),
+    file: UploadFile = File(..., description="File to analyze (document, image, audio, or video)"),
 ) -> AnalyzeResponse:
     # ── Resolve MIME type ────────────────────────────────────────────────────
     declared_mime = (file.content_type or "").lower().split(";")[0].strip()
@@ -149,12 +196,6 @@ async def analyze(
 
     # ── Guard: fail fast if analyzer_id is not configured ───────────────────
     if not analyzer_id.strip():
-        _ENV_KEY_MAP = {
-            "pdf": "ANALYZER_ID_DOCUMENT",
-            "image": "ANALYZER_ID_IMAGE",
-            "audio": "ANALYZER_ID_AUDIO",
-            "video": "ANALYZER_ID_VIDEO",
-        }
         env_key = _ENV_KEY_MAP.get(file_type_label, "ANALYZER_ID_*")
         logger.error(
             "[ROUTE] Analyzer ID not configured for file_type=%s — set %s in .env",
@@ -230,6 +271,7 @@ async def analyze(
     return AnalyzeResponse(
         success=True,
         file_name=file_name,
+        file_names=[file_name],
         file_type=file_type_label,
         analyzer_id=analyzer_id,
         latency_ms=latency_ms,

@@ -8,6 +8,8 @@ export interface FieldResult {
 export interface AnalyzeResponse {
   success: boolean;
   file_name: string;
+  /** All file names submitted in this run (multi-file Pro mode). */
+  file_names: string[];
   file_type: string;
   analyzer_id: string;
   latency_ms: number;

@@ -6,3 +6,4 @@ pydantic>=2.7.0
 pydantic-settings>=2.3.0
 azure-ai-contentunderstanding>=1.0.0b1
 azure-core>=1.30.0
+pypdf>=5.0.0

@@ -1,4 +1,4 @@
-$path = "C:\iNextlabs\CONTENT_UNDERSTANDING\frontend\src\utils\transcript.ts"
+$path = Join-Path $PSScriptRoot "frontend\src\utils\transcript.ts"
 $raw = [System.IO.File]::ReadAllText($path)
 # Normalize to LF
 $c = $raw -replace "`r`n", "`n"

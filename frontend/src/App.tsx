@@ -6,6 +6,9 @@ import SplitReviewLayout from "./components/SplitReviewLayout";
 import EmptyState from "./components/EmptyState";
 import LoadingState from "./components/LoadingState";
 import ErrorBanner from "./components/ErrorBanner";
+import ModeSwitch from "./components/ModeSwitch";
+import type { Mode } from "./components/ModeSwitch";
+import ProWorkspace from "./components/ProWorkspace";
 
 type AppState =
   | { status: "idle" }
@@ -18,6 +21,7 @@ export default function App() {
   const [selectedFieldName, setSelectedFieldName] = useState<string | null>(
     null,
   );
+  const [mode, setMode] = useState<Mode>("standard");
 
   async function handleFileSelected(file: File) {
     setSelectedFieldName(null);
@@ -105,32 +109,40 @@ export default function App() {
           </p>
         </div>
 
-        <UploadCard
-          onFileSelected={handleFileSelected}
-          onReset={handleReset}
-          isLoading={state.status === "loading"}
-        />
+        <ModeSwitch mode={mode} onChange={setMode} />
 
-        {state.status === "error" && (
-          <ErrorBanner
-            message={state.message}
-            detail={state.detail}
-            onDismiss={handleReset}
-          />
+        {mode === "standard" && (
+          <>
+            <UploadCard
+              onFileSelected={handleFileSelected}
+              onReset={handleReset}
+              isLoading={state.status === "loading"}
+            />
+
+            {state.status === "error" && (
+              <ErrorBanner
+                message={state.message}
+                detail={state.detail}
+                onDismiss={handleReset}
+              />
+            )}
+
+            {state.status === "loading" && <LoadingState />}
+
+            {state.status === "idle" && <EmptyState />}
+
+            {state.status === "success" && (
+              <SplitReviewLayout
+                result={state.result}
+                uploadedFile={state.uploadedFile}
+                selectedFieldName={selectedFieldName}
+                onFieldSelect={setSelectedFieldName}
+              />
+            )}
+          </>
         )}
 
-        {state.status === "loading" && <LoadingState />}
-
-        {state.status === "idle" && <EmptyState />}
-
-        {state.status === "success" && (
-          <SplitReviewLayout
-            result={state.result}
-            uploadedFile={state.uploadedFile}
-            selectedFieldName={selectedFieldName}
-            onFieldSelect={setSelectedFieldName}
-          />
-        )}
+        {mode === "pro" && <ProWorkspace />}
       </main>
 
       {/* Footer */}
